@@ -54,13 +54,33 @@ function popup(msg, color = "#4BB543") {
   }, 3000);
 }
 
+// Get crypto subtle with fallback
+function getCrypto() {
+  if (window.crypto && window.crypto.subtle) {
+    return window.crypto.subtle;
+  } else {
+    throw new Error("Web Crypto API is not available in this browser. Please use Chrome, Firefox, or Edge.");
+  }
+}
+
+// Get crypto for random values
+function getRandomCrypto() {
+  if (window.crypto && window.crypto.getRandomValues) {
+    return window.crypto;
+  } else {
+    throw new Error("Web Crypto API is not available for random values.");
+  }
+}
+
 // PBKDF2 derive AES-GCM key from password
 async function deriveKeyFromPassword(password, salt, iterations=200000){
   console.log("Deriving key from password...");
   console.log("Password length:", password.length);
   console.log("Salt length:", salt.length);
   
-  const pwKey = await crypto.subtle.importKey(
+  const subtle = getCrypto();
+  
+  const pwKey = await subtle.importKey(
     'raw', 
     str2ab(password), 
     {name:'PBKDF2'}, 
@@ -68,7 +88,7 @@ async function deriveKeyFromPassword(password, salt, iterations=200000){
     ['deriveKey']
   );
   
-  const key = await crypto.subtle.deriveKey(
+  const key = await subtle.deriveKey(
     {
       name:'PBKDF2', 
       salt: salt, 
@@ -87,17 +107,22 @@ async function deriveKeyFromPassword(password, salt, iterations=200000){
 
 // Encrypt JSON
 async function encryptJSON(key, obj){
+  const subtle = getCrypto();
+  const crypto = getRandomCrypto();
+  
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const pt = str2ab(JSON.stringify(obj));
-  const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, pt);
+  const ct = await subtle.encrypt({name:'AES-GCM', iv}, key, pt);
   return { iv: buf2b64(iv), ct: buf2b64(ct) };
 }
 
 // Decrypt JSON
 async function decryptJSON(key, ivB64, ctB64){
+  const subtle = getCrypto();
+  
   const iv = b642buf(ivB64);
   const ct = b642buf(ctB64);
-  const pt = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, ct);
+  const pt = await subtle.decrypt({name:'AES-GCM', iv}, key, ct);
   return JSON.parse(ab2str(pt));
 }
 
@@ -135,28 +160,46 @@ async function createAccount() {
   log("Generating keys for", username);
 
   try {
+    // Check crypto availability first
+    const subtle = getCrypto();
+    const crypto = getRandomCrypto();
+    
     console.log("Step 1: Generating ECDH key pair...");
-    const ecdh = await crypto.subtle.generateKey(
-      { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
+    const ecdh = await subtle.generateKey(
+      { 
+        name: 'ECDH', 
+        namedCurve: 'P-256' 
+      }, 
+      true, // extractable
+      ['deriveKey', 'deriveBits'] // key usages
+    );
     console.log("ECDH keys generated");
     
     console.log("Step 2: Generating ECDSA key pair...");
-    const ecdsa = await crypto.subtle.generateKey(
-      { name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+    const ecdsa = await subtle.generateKey(
+      { 
+        name: 'ECDSA', 
+        namedCurve: 'P-256' 
+      }, 
+      true, // extractable
+      ['sign', 'verify'] // key usages
+    );
     console.log("ECDSA keys generated");
 
     // Export keys
     console.log("Step 3: Exporting keys...");
-    const pubEcdh = await crypto.subtle.exportKey('jwk', ecdh.publicKey);
-    const pubEcdsa = await crypto.subtle.exportKey('jwk', ecdsa.publicKey);
-    const privEcdh = await crypto.subtle.exportKey('jwk', ecdh.privateKey);
-    const privEcdsa = await crypto.subtle.exportKey('jwk', ecdsa.privateKey);
+    const pubEcdh = await subtle.exportKey('jwk', ecdh.publicKey);
+    const pubEcdsa = await subtle.exportKey('jwk', ecdsa.publicKey);
+    
+    const privEcdhJwk = await subtle.exportKey('jwk', ecdh.privateKey);
+    const privEcdsaJwk = await subtle.exportKey('jwk', ecdsa.privateKey);
+    
     console.log("Keys exported");
 
     // Create signature
     console.log("Step 4: Creating signature...");
     const data = new TextEncoder().encode(JSON.stringify(pubEcdh));
-    const signature = await crypto.subtle.sign(
+    const signature = await subtle.sign(
       { name: 'ECDSA', hash: 'SHA-256' }, ecdsa.privateKey, data);
     const sigB64 = buf2b64(signature);
     console.log("Signature created");
@@ -169,7 +212,10 @@ async function createAccount() {
     const storageKey = await deriveKeyFromPassword(password, salt, 200000);
     console.log("Storage key derived");
 
-    const storeObj = { privEcdh, privEcdsa };
+    const storeObj = { 
+      privEcdh: privEcdhJwk, 
+      privEcdsa: privEcdsaJwk 
+    };
     console.log("Store object created with private keys");
     
     const enc = await encryptJSON(storageKey, storeObj);
@@ -260,11 +306,29 @@ async function login() {
     console.log("Private ECDSA key present:", !!storeObj.privEcdsa);
 
     console.log("Step 4: Importing private keys...");
-    const privEcdh = await crypto.subtle.importKey('jwk', storeObj.privEcdh, 
-      { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
+    const subtle = getCrypto();
     
-    const privEcdsa = await crypto.subtle.importKey('jwk', storeObj.privEcdsa, 
-      { name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+    const privEcdh = await subtle.importKey(
+      'jwk', 
+      storeObj.privEcdh, 
+      { 
+        name: 'ECDH', 
+        namedCurve: 'P-256' 
+      }, 
+      true, // extractable
+      ['deriveKey', 'deriveBits'] // MUST match generation usages
+    );
+    
+    const privEcdsa = await subtle.importKey(
+      'jwk', 
+      storeObj.privEcdsa, 
+      { 
+        name: 'ECDSA', 
+        namedCurve: 'P-256' 
+      }, 
+      true, // extractable
+      ['sign'] // MUST match generation usages
+    );
 
     console.log("Private keys imported successfully");
 
@@ -296,10 +360,22 @@ async function getVerifiedPublicKey(username){
   const pubEcdsa = j.signingPublicKeyJwk;
   const sig = j.signature;
 
-  const spk = await crypto.subtle.importKey('jwk', pubEcdsa, {name:'ECDSA', namedCurve:'P-256'}, true, ['verify']);
+  const subtle = getCrypto();
+  
+  const spk = await subtle.importKey(
+    'jwk', 
+    pubEcdsa, 
+    {
+      name: 'ECDSA', 
+      namedCurve: 'P-256'
+    }, 
+    true, 
+    ['verify'] // Only 'verify' for public key
+  );
+  
   const data = new TextEncoder().encode(JSON.stringify(pubEcdh));
 
-  const valid = await crypto.subtle.verify(
+  const valid = await subtle.verify(
     {name:'ECDSA', hash:'SHA-256'},
     spk,
     Uint8Array.from(atob(sig), c=>c.charCodeAt(0)),
@@ -308,16 +384,28 @@ async function getVerifiedPublicKey(username){
 
   if(!valid) throw new Error("Invalid signature for " + username);
 
-  return await crypto.subtle.importKey('jwk', pubEcdh, {name:'ECDH', namedCurve:'P-256'}, true, []);
+  return await subtle.importKey(
+    'jwk', 
+    pubEcdh, 
+    {
+      name: 'ECDH', 
+      namedCurve: 'P-256'
+    }, 
+    true, 
+    [] // Empty array for public key - no operations needed
+  );
 }
 
 // ------------------ ECDH → HKDF -------------------
 async function deriveAesKey(privEcdh, theirPubKey){
-  const shared = await crypto.subtle.deriveBits({name:'ECDH', public:theirPubKey}, privEcdh, 256);
-  const rawKey = await crypto.subtle.importKey('raw', shared, {name:'HKDF'}, false, ['deriveKey']);
+  const subtle = getCrypto();
+  const crypto = getRandomCrypto();
+  
+  const shared = await subtle.deriveBits({name:'ECDH', public:theirPubKey}, privEcdh, 256);
+  const rawKey = await subtle.importKey('raw', shared, {name:'HKDF'}, false, ['deriveKey']);
   const salt = crypto.getRandomValues(new Uint8Array(16));
 
-  const aesKey = await crypto.subtle.deriveKey(
+  const aesKey = await subtle.deriveKey(
     {name:'HKDF', hash:'SHA-256', salt, info:new Uint8Array([])},
     rawKey,
     {name:'AES-GCM', length:256},
@@ -341,8 +429,11 @@ async function sendMessage(){
     const theirPub = await getVerifiedPublicKey(to);
     const { aesKey, salt } = await deriveAesKey(window._me.privEcdh, theirPub);
 
+    const subtle = getCrypto();
+    const crypto = getRandomCrypto();
+    
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv}, aesKey, str2ab(plaintext));
+    const ct = await subtle.encrypt({name:'AES-GCM', iv}, aesKey, str2ab(plaintext));
 
     const payload = {
       from, to,
@@ -388,10 +479,12 @@ async function fetchMessages(){
         const theirPub = await getVerifiedPublicKey(m.from);
         const salt = b642buf(m.hkdf_salt);
 
-        const shared = await crypto.subtle.deriveBits({name:'ECDH', public:theirPub}, window._me.privEcdh, 256);
-        const rawKey = await crypto.subtle.importKey('raw', shared, {name:'HKDF'}, false, ['deriveKey']);
+        const subtle = getCrypto();
+        
+        const shared = await subtle.deriveBits({name:'ECDH', public:theirPub}, window._me.privEcdh, 256);
+        const rawKey = await subtle.importKey('raw', shared, {name:'HKDF'}, false, ['deriveKey']);
 
-        const aesKey = await crypto.subtle.deriveKey(
+        const aesKey = await subtle.deriveKey(
           {name:'HKDF', hash:'SHA-256', salt, info:new Uint8Array([])},
           rawKey,
           {name:'AES-GCM', length:256},
@@ -399,7 +492,7 @@ async function fetchMessages(){
           ['decrypt']
         );
 
-        const plain = await crypto.subtle.decrypt({name:'AES-GCM', iv:b642buf(m.iv)}, aesKey, b642buf(m.ciphertext));
+        const plain = await subtle.decrypt({name:'AES-GCM', iv:b642buf(m.iv)}, aesKey, b642buf(m.ciphertext));
         const msg = ab2str(plain);
 
         log(`From ${m.from} → Seq ${m.seq} → ${msg}`);
@@ -441,10 +534,13 @@ async function sendFile() {
     reader.onload = async function(e) {
       try {
         const fileData = new Uint8Array(e.target.result);
+        const subtle = getCrypto();
+        const crypto = getRandomCrypto();
+        
         const iv = crypto.getRandomValues(new Uint8Array(12));
         
         // Encrypt the file
-        const encryptedFile = await crypto.subtle.encrypt(
+        const encryptedFile = await subtle.encrypt(
           { name: 'AES-GCM', iv }, aesKey, fileData);
         
         // Prepare file chunks (in this case, just one chunk for simplicity)
@@ -547,3 +643,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Export for debugging
 window.debugAccounts = debugStorage;
+
+// Check if Web Crypto is available on page load
+document.addEventListener('DOMContentLoaded', function() {
+  try {
+    getCrypto();
+    getRandomCrypto();
+    console.log("Web Crypto API is available!");
+  } catch (e) {
+    console.error("Web Crypto API not available:", e.message);
+    popup("Web Crypto API is not available. Please use Chrome, Firefox, or Edge.", "#D9534F");
+  }
+});
