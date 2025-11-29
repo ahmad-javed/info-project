@@ -1,0 +1,60 @@
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  max-width: 900px;
+  margin: auto;
+  padding: 20px;
+  background: #f0f2f5;
+  color: #333;
+}
+h1 { color: #FFD700; text-align:center; }
+.account, .message-section, .file-section { background:#fff; padding:20px; border-radius:12px; box-shadow:0 4px 10px rgba(0,0,0,0.1); margin-bottom:20px; }
+input, textarea, button { padding:10px; margin:5px 0; width:100%; border-radius:8px; border:1px solid #ccc; }
+button { background:#FFD700; border:none; color:#333; font-weight:bold; cursor:pointer; transition:0.3s; }
+button:hover { background:#e6c200; }
+textarea { height:80px; resize:none; }
+pre { background:#222; color:#0f0; padding:15px; border-radius:10px; overflow-x:auto; max-height:300px; }
+small { color: #666; font-style: italic; }
+
+/* Popup styles */
+.popup {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 15px 25px;
+  background: #4BB543;
+  color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  z-index: 9999;
+  font-weight: bold;
+  animation: slideIn 0.3s ease-out;
+}
+
+.popup.error {
+  background: #D9534F;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.actions button {
+  flex: 1;
+}
+
+.logs {
+  margin-top: 20px;
+}
