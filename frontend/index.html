@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>E2EE Complete Demo</title>
+  <style>
+    body { font-family: system-ui, Arial; padding: 20px; max-width:900px; }
+    textarea { width:100%; height:100px; }
+    input, button { padding:8px; margin:6px 0; }
+    pre { background:#f5f5f5; padding:10px; white-space: pre-wrap;}
+    .row{display:flex; gap:10px; align-items:center;}
+  </style>
+</head>
+<body>
+  <h1>E2EE Demo - Signatures + Secure Storage + Replay Protection</h1>
+
+  <div class="row">
+    <label>Username: <input id="username" value="alice"/></label>
+    <label>Password: <input id="password" type="password" value="pass123"/></label>
+    <button id="create">Create Account & Register Keys</button>
+    <button id="login">Load Keys (Login)</button>
+  </div>
+
+  <hr/>
+  <h3>Send Message</h3>
+  <div class="row">
+    <label>To: <input id="to" value="bob"/></label>
+    <label>Seq#: <input id="seq" value="1" type="number" min="1"/></label>
+  </div>
+  <textarea id="plaintext">Hello from Alice</textarea><br/>
+  <button id="send">Encrypt & Send</button>
+
+  <hr/>
+  <button id="fetchMsgs">Fetch My Messages</button>
+  <pre id="log"></pre>
+
+  <script src="app.js"></script>
+</body>
+</html>

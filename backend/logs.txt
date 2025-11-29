@@ -1,0 +1,6 @@
+--- log started 2025-11-29T08:14:06.184Z
+{"ts":"2025-11-29T08:14:51.772Z","event":"register","username":"alice"}
+{"ts":"2025-11-29T08:15:13.249Z","event":"register","username":"bob"}
+{"ts":"2025-11-29T08:16:18.002Z","event":"register","username":"ahmad"}
+{"ts":"2025-11-29T08:18:01.270Z","event":"register","username":"bob"}
+{"ts":"2025-11-29T08:18:22.492Z","event":"register","username":"bob"}
